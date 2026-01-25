@@ -1,60 +1,78 @@
 import os
-from langchain_community.document_loaders import PyPDFLoader
+import sys
+from dotenv import load_dotenv
 from langchain_google_genai.embeddings import GoogleGenerativeAIEmbeddings
 from langchain_postgres import PGVector
-
-from dotenv import load_dotenv
+from langchain_google_genai import ChatGoogleGenerativeAI
+from search import search_prompt
 
 load_dotenv()
 
-for key in ("PDF_PATH", "GOOGLE_API_KEY", "DATABASE_URL", "GOOGLE_EMBEDDING_MODEL", "PG_VECTOR_COLLECTION_NAME"):
-    if not os.getenv(key):
-        raise ValueError(f"Environment variable {key} is not set")
+def main():
+    # Load configuration
+    GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
+    DATABASE_URL = os.getenv("DATABASE_URL")
+    GOOGLE_EMBEDDING_MODEL = os.getenv("GOOGLE_EMBEDDING_MODEL")
+    GOOGLE_GENERATIVE_MODEL = os.getenv("GOOGLE_GENERATIVE_MODEL")
+    PG_VECTOR_COLLECTION_NAME = os.getenv("PG_VECTOR_COLLECTION_NAME")
     
-PDF_PATH = os.getenv("PDF_PATH")
-GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
-DATABASE_URL = os.getenv("DATABASE_URL")
-GOOGLE_EMBEDDING_MODEL = os.getenv("GOOGLE_EMBEDDING_MODEL")
-PG_VECTOR_COLLECTION_NAME = os.getenv("PG_VECTOR_COLLECTION_NAME")
+    if not GOOGLE_API_KEY:
+        print("Erro: GOOGLE_API_KEY não definida.")
+        sys.exit(1)
+
+    print("Inicializando sistema de chat...")
+
+    try:
+        # Initialize components
+        embeddings = GoogleGenerativeAIEmbeddings(
+            model=GOOGLE_EMBEDDING_MODEL,
+            google_api_key=GOOGLE_API_KEY
+        )
+
+        pg_vector = PGVector(
+            embeddings=embeddings,
+            collection_name=PG_VECTOR_COLLECTION_NAME,
+            connection=DATABASE_URL,
+            use_jsonb=True
+        )
+
+        llm = ChatGoogleGenerativeAI(
+            model=GOOGLE_GENERATIVE_MODEL,
+            temperature=0.1,
+            google_api_key=GOOGLE_API_KEY
+        )
+    except Exception as e:
+        print(f"Erro na inicialização: {e}")
+        sys.exit(1)
     
-query = "Qual é o faturamento da Cobalto Gás Indústria?"
+    print("\nSistema pronto! Digite 'sair' para encerrar.\n")
+    print("-" * 50)
 
-embeddings = GoogleGenerativeAIEmbeddings(
-    model=GOOGLE_EMBEDDING_MODEL,
-    google_api_key=GOOGLE_API_KEY
-)
+    while True:
+        try:
+            question = input("\nFaça sua pergunta: ").strip()
+            
+            if not question:
+                continue
+                
+            if question.lower() in ["sair", "exit", "quit"]:
+                print("Encerrando...")
+                break
+                
+            print("\nBuscando resposta...\n")
+            
+            response = search_prompt(question, pg_vector, llm)
+            
+            print("-" * 50)
+            print(f"PERGUNTA: {question}")
+            print(f"RESPOSTA: {response}")
+            print("-" * 50)
+            
+        except KeyboardInterrupt:
+            print("\nEncerrando...")
+            break
+        except Exception as e:
+            print(f"\nErro ao processar pergunta: {e}")
 
-pg_vector = PGVector(
-        embeddings=embeddings,
-        collection_name=PG_VECTOR_COLLECTION_NAME,
-        connection=DATABASE_URL,
-        use_jsonb=True
-    )
-
-results = pg_vector.similarity_search_with_score(query, k=10)
-
-for i, (doc, score) in enumerate(results, start=1):
-    print("="*50)
-    print(f"Resultado {i} (score: {score:.2f}):")
-    print("="*50)
-    
-    print("\nTexto:\n")
-    print(doc.page_content.strip())
-    
-    print("\nMetadados:\n")
-    for k, v in doc.metadata.items():
-        print(f"{k}: {v}")
-    
-# from search import search_prompt
-
-# def main():
-#     chain = search_prompt()
-
-#     if not chain:
-#         print("Não foi possível iniciar o chat. Verifique os erros de inicialização.")
-#         return
-    
-#     pass
-
-# if __name__ == "__main__":
-#     main()
+if __name__ == "__main__":
+    main()
