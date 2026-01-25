@@ -1,3 +1,6 @@
+from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_core.prompts import PromptTemplate
+
 PROMPT_TEMPLATE = """
 CONTEXTO:
 {contexto}
@@ -25,5 +28,29 @@ PERGUNTA DO USUÁRIO:
 RESPONDA A "PERGUNTA DO USUÁRIO"
 """
 
-def search_prompt(question=None):
-    pass
+def search_prompt(question, pg_vector, llm):
+    """
+    Realiza busca semântica e gera resposta usando LLM.
+    
+    Args:
+        question (str): Pergunta do usuário
+        pg_vector (PGVector): Instância do banco vetorial
+        llm (ChatGoogleGenerativeAI): Instância do LLM
+        
+    Returns:
+        str: Resposta gerada
+    """
+    # Buscar documentos relevantes
+    results = pg_vector.similarity_search_with_score(question, k=10)
+    
+    # Concatenar contexto
+    contexto = "\n\n".join([doc.page_content for doc, score in results])
+    
+    # Criar prompt
+    prompt = PromptTemplate.from_template(PROMPT_TEMPLATE)
+    formatted_prompt = prompt.format(contexto=contexto, pergunta=question)
+    
+    # Gerar resposta
+    response = llm.invoke(formatted_prompt)
+    
+    return response.content
