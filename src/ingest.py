@@ -31,7 +31,7 @@ def enrich_chunks(chunks):
 
 def ingest_pdf(max_chunks=None):
     docs = PyPDFLoader(str(PDF_PATH)).load()
-    splits = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200, add_start_index=False).split_documents(docs)
+    splits = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=150, add_start_index=False).split_documents(docs)
     
     if not splits:
         raise ValueError("No splits found")
